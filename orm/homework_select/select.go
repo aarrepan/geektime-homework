@@ -51,6 +51,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 	if err = s.buildColumns(); err != nil {
 		return nil, err
 	}
+
 	s.sb.WriteString(" FROM ")
 	if s.table == "" {
 		s.sb.WriteByte('`')
@@ -62,10 +63,9 @@ func (s *Selector[T]) Build() (*Query, error) {
 
 	// 构造 WHERE
 	if len(s.where) > 0 {
-		// 类似这种可有可无的部分，都要在前面加一个空格
 		s.sb.WriteString(" WHERE ")
-		// WHERE 是不允许用别名的
-		if err = s.buildPredicates(s.where); err != nil {
+		// WHERE 不允许用别名
+		if err = s.buildPredicates(s.where, false); err != nil {
 			return nil, err
 		}
 	}
@@ -76,7 +76,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 			if i > 0 {
 				s.sb.WriteByte(',')
 			}
-			if err = s.buildColumn(c.name, ""); err != nil {
+			if err = s.buildColumn(c.name, c.alias); err != nil {
 				return nil, err
 			}
 		}
@@ -84,7 +84,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 
 	if len(s.having) > 0 {
 		s.sb.WriteString(" HAVING ")
-		if err = s.buildPredicates(s.having); err != nil {
+		if err = s.buildPredicates(s.having, true); err != nil {
 			return nil, err
 		}
 	}
@@ -128,12 +128,12 @@ func (s *Selector[T]) buildOrderBy() error {
 	return nil
 }
 
-func (s *Selector[T]) buildPredicates(ps []Predicate) error {
-	p := ps[0]
-	for i := 1; i < len(ps); i++ {
-		p = p.And(ps[i])
+func (s *Selector[T]) buildPredicates(ps []Predicate, useAlias bool) error {
+	predExpress := ps[0]
+	for idx := 1; idx < len(ps); idx++ {
+		predExpress = predExpress.And(ps[idx])
 	}
-	return s.buildExpression(p)
+	return s.buildExpression(predExpress, useAlias)
 }
 
 func (s *Selector[T]) buildColumns() error {
@@ -141,8 +141,8 @@ func (s *Selector[T]) buildColumns() error {
 		s.sb.WriteByte('*')
 		return nil
 	}
-	for i, c := range s.columns {
-		if i > 0 {
+	for idx, c := range s.columns {
+		if idx > 0 {
 			s.sb.WriteByte(',')
 		}
 		switch val := c.(type) {
@@ -169,11 +169,12 @@ func (s *Selector[T]) buildColumns() error {
 func (s *Selector[T]) buildAggregate(a Aggregate, useAlias bool) error {
 	s.sb.WriteString(a.fn)
 	s.sb.WriteString("(`")
-	fd, ok := s.model.FieldMap[a.arg]
+
+	fieldName, ok := s.model.FieldMap[a.arg]
 	if !ok {
 		return errs.NewErrUnknownField(a.arg)
 	}
-	s.sb.WriteString(fd.ColName)
+	s.sb.WriteString(fieldName.ColName)
 	s.sb.WriteString("`)")
 	if useAlias {
 		s.buildAs(a.alias)
@@ -183,11 +184,11 @@ func (s *Selector[T]) buildAggregate(a Aggregate, useAlias bool) error {
 
 func (s *Selector[T]) buildColumn(c string, alias string) error {
 	s.sb.WriteByte('`')
-	fd, ok := s.model.FieldMap[c]
+	fieldName, ok := s.model.FieldMap[c]
 	if !ok {
 		return errs.NewErrUnknownField(c)
 	}
-	s.sb.WriteString(fd.ColName)
+	s.sb.WriteString(fieldName.ColName)
 	s.sb.WriteByte('`')
 	if alias != "" {
 		s.buildAs(alias)
@@ -195,14 +196,16 @@ func (s *Selector[T]) buildColumn(c string, alias string) error {
 	return nil
 }
 
-func (s *Selector[T]) buildExpression(e Expression) error {
+func (s *Selector[T]) buildExpression(e Expression, useAlias bool) error {
 	if e == nil {
 		return nil
 	}
 	switch exp := e.(type) {
 	case Column:
-		// 永远不用别名
-		return s.buildColumn(exp.name, "")
+		if !useAlias {
+			return s.buildColumn(exp.name, "")
+		}
+		return s.buildColumn(exp.name, exp.alias)
 	case Aggregate:
 		return s.buildAggregate(exp, false)
 	case value:
@@ -214,14 +217,14 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 			s.addArgs(exp.args...)
 		}
 	case Predicate:
-		_, lp := exp.left.(Predicate)
-		if lp {
+		_, leftPred := exp.left.(Predicate)
+		if leftPred {
 			s.sb.WriteByte('(')
 		}
-		if err := s.buildExpression(exp.left); err != nil {
+		if err := s.buildExpression(exp.left, useAlias); err != nil {
 			return err
 		}
-		if lp {
+		if leftPred {
 			s.sb.WriteByte(')')
 		}
 
@@ -234,14 +237,14 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 		s.sb.WriteString(exp.op.String())
 		s.sb.WriteByte(' ')
 
-		_, rp := exp.right.(Predicate)
-		if rp {
+		_, rightPred := exp.right.(Predicate)
+		if rightPred {
 			s.sb.WriteByte('(')
 		}
-		if err := s.buildExpression(exp.right); err != nil {
+		if err := s.buildExpression(exp.right, useAlias); err != nil {
 			return err
 		}
-		if rp {
+		if rightPred {
 			s.sb.WriteByte(')')
 		}
 	default:
@@ -283,14 +286,14 @@ func (s *Selector[T]) OrderBy(orderBys ...OrderBy) *Selector[T] {
 }
 
 func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
-	q, err := s.Build()
+	getQuery, err := s.Build()
 	if err != nil {
 		return nil, err
 	}
 	// s.db 是我们定义的 DB
 	// s.db.db 则是 sql.DB
 	// 使用 QueryContext，从而和 GetMulti 能够复用处理结果集的代码
-	rows, err := s.db.db.QueryContext(ctx, q.SQL, q.Args...)
+	rows, err := s.db.db.QueryContext(ctx, getQuery.SQL, getQuery.Args...)
 	if err != nil {
 		return nil, err
 	}
@@ -318,8 +321,7 @@ func (s *Selector[T]) addArgs(args ...any) {
 
 func (s *Selector[T]) buildAs(alias string) {
 	if alias != "" {
-		s.sb.WriteString(" AS ")
-		s.sb.WriteByte('`')
+		s.sb.WriteString(" AS `")
 		s.sb.WriteString(alias)
 		s.sb.WriteByte('`')
 	}
@@ -327,19 +329,21 @@ func (s *Selector[T]) buildAs(alias string) {
 
 func (s *Selector[T]) GetMulti(ctx context.Context) ([]*T, error) {
 	var db sql.DB
-	q, err := s.Build()
+	getQuery, err := s.Build()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, q.SQL, q.Args...)
+	rows, err := db.QueryContext(ctx, getQuery.SQL, getQuery.Args...)
 	if err != nil {
 		return nil, err
 	}
+
 	rtnSelect := make([]*T, 0)
 	_, err = rows.Columns()
 	if err != nil {
 		return nil, err
 	}
+
 	for rows.Next() {
 		// 在这里构造 []*T
 		tp := new(T)
