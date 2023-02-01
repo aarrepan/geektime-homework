@@ -9,67 +9,67 @@ import (
 )
 
 func Test_router_AddRoute(t *testing.T) {
-	testRoutes := []struct{
+	testRoutes := []struct {
 		method string
-		path string
-	} {
+		path   string
+	}{
 		{
 			method: http.MethodGet,
-			path: "/",
+			path:   "/",
 		},
 		{
 			method: http.MethodGet,
-			path: "/user",
+			path:   "/user",
 		},
 		{
 			method: http.MethodGet,
-			path: "/user/home",
+			path:   "/user/home",
 		},
 		{
 			method: http.MethodGet,
-			path: "/order/detail",
+			path:   "/order/detail",
 		},
 		{
 			method: http.MethodPost,
-			path: "/order/create",
+			path:   "/order/create",
 		},
 		{
 			method: http.MethodPost,
-			path: "/login",
+			path:   "/login",
 		},
 		// 通配符测试用例
 		{
 			method: http.MethodGet,
-			path: "/order/*",
+			path:   "/order/*",
 		},
 		{
 			method: http.MethodGet,
-			path: "/*",
+			path:   "/*",
 		},
 		{
 			method: http.MethodGet,
-			path: "/*/*",
+			path:   "/*/*",
 		},
 		{
 			method: http.MethodGet,
-			path: "/*/abc",
+			path:   "/*/abc",
 		},
 		{
 			method: http.MethodGet,
-			path: "/*/abc/*",
+			path:   "/*/abc/*",
 		},
 		// 参数路由
 		{
 			method: http.MethodGet,
-			path: "/param/:id",
+			path:   "/param/:id",
 		},
 		{
 			method: http.MethodGet,
-			path: "/param/:id/detail",
+			path:   "/param/:id/detail",
 		},
 		{
 			method: http.MethodGet,
-			path: "/param/:id/*",
+			path:   "/param/:id/*",
 		},
 	}
 
@@ -95,26 +95,26 @@ func Test_router_AddRoute(t *testing.T) {
 						paramChild: &node{
 							path: ":id",
 							starChild: &node{
-								path: "*",
+								path:    "*",
 								handler: mockHandler,
 							},
 							children: map[string]*node{"detail": {path: "detail", handler: mockHandler}},
-							handler: mockHandler,
+							handler:  mockHandler,
 						},
 					},
 				},
-				starChild:&node{
+				starChild: &node{
 					path: "*",
 					children: map[string]*node{
 						"abc": {
-							path: "abc",
+							path:      "abc",
 							starChild: &node{path: "*", handler: mockHandler},
-							handler: mockHandler},
+							handler:   mockHandler},
 					},
 					starChild: &node{path: "*", handler: mockHandler},
-					handler: mockHandler},
+					handler:   mockHandler},
 				handler: mockHandler},
-			http.MethodPost: { path: "/", children: map[string]*node{
+			http.MethodPost: {path: "/", children: map[string]*node{
 				"order": {path: "order", children: map[string]*node{
 					"create": {path: "create", handler: mockHandler},
 				}},
@@ -245,92 +245,92 @@ func (n *node) equal(y *node) (string, bool) {
 }
 
 func Test_router_findRoute(t *testing.T) {
-	testRoutes := []struct{
+	testRoutes := []struct {
 		method string
-		path string
-	} {
+		path   string
+	}{
 		{
 			method: http.MethodGet,
-			path: "/",
+			path:   "/",
 		},
 		{
 			method: http.MethodGet,
-			path: "/user",
+			path:   "/user",
 		},
 		{
 			method: http.MethodPost,
-			path: "/order/create",
+			path:   "/order/create",
 		},
 		{
 			method: http.MethodGet,
-			path: "/user/*/home",
+			path:   "/user/*/home",
 		},
 		{
 			method: http.MethodPost,
-			path: "/order/*",
+			path:   "/order/*",
 		},
 		// 参数路由
 		{
 			method: http.MethodGet,
-			path: "/param/:id",
+			path:   "/param/:id",
 		},
 		{
 			method: http.MethodGet,
-			path: "/param/:id/detail",
+			path:   "/param/:id/detail",
 		},
 		{
 			method: http.MethodGet,
-			path: "/param/:id/*",
+			path:   "/param/:id/*",
 		},
 	}
 
 	mockHandler := func(ctx *Context) {}
 
 	testCases := []struct {
-		name string
+		name   string
 		method string
-		path string
-		found bool
-		mi *matchInfo
+		path   string
+		found  bool
+		mi     *matchInfo
 	}{
 		{
-			name: "method not found",
+			name:   "method not found",
 			method: http.MethodHead,
 		},
 		{
-			name: "path not found",
+			name:   "path not found",
 			method: http.MethodGet,
-			path: "/abc",
+			path:   "/abc",
 		},
 		{
-			name: "root",
+			name:   "root",
 			method: http.MethodGet,
-			path: "/",
-			found: true,
+			path:   "/",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
-					path: "/",
+					path:    "/",
 					handler: mockHandler,
 				},
 			},
 		},
 		{
-			name: "user",
+			name:   "user",
 			method: http.MethodGet,
-			path: "/user",
-			found: true,
+			path:   "/user",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
-					path: "user",
+					path:    "user",
 					handler: mockHandler,
 				},
 			},
 		},
 		{
-			name: "no handler",
+			name:   "no handler",
 			method: http.MethodPost,
-			path: "/order",
-			found: true,
+			path:   "/order",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
 					path: "order",
@@ -338,13 +338,13 @@ func Test_router_findRoute(t *testing.T) {
 			},
 		},
 		{
-			name: "two layer",
+			name:   "two layer",
 			method: http.MethodPost,
-			path: "/order/create",
-			found: true,
+			path:   "/order/create",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
-					path: "create",
+					path:    "create",
 					handler: mockHandler,
 				},
 			},
@@ -352,13 +352,13 @@ func Test_router_findRoute(t *testing.T) {
 		// 通配符匹配
 		{
 			// 命中/order/*
-			name: "star match",
+			name:   "star match",
 			method: http.MethodPost,
-			path: "/order/delete",
-			found: true,
+			path:   "/order/delete",
+			found:  true,
 			mi: &matchInfo{
-				n:  &node{
-					path: "*",
+				n: &node{
+					path:    "*",
 					handler: mockHandler,
 				},
 			},
@@ -366,33 +366,33 @@ func Test_router_findRoute(t *testing.T) {
 		{
 			// 命中通配符在中间的
 			// /user/*/home
-			name: "star in middle",
+			name:   "star in middle",
 			method: http.MethodGet,
-			path: "/user/Tom/home",
-			found: true,
+			path:   "/user/Tom/home",
+			found:  true,
 			mi: &matchInfo{
-				n:&node{
-					path: "home",
+				n: &node{
+					path:    "home",
 					handler: mockHandler,
 				},
 			},
 		},
 		{
 			// 比 /order/* 多了一段
-			name: "overflow",
+			name:   "overflow",
 			method: http.MethodPost,
-			path: "/order/delete/123",
+			path:   "/order/delete/123",
 		},
 		// 参数匹配
 		{
 			// 命中 /param/:id
-			name: ":id",
+			name:   ":id",
 			method: http.MethodGet,
-			path: "/param/123",
-			found: true,
+			path:   "/param/123",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
-					path: ":id",
+					path:    ":id",
 					handler: mockHandler,
 				},
 				pathParams: map[string]string{"id": "123"},
@@ -400,13 +400,13 @@ func Test_router_findRoute(t *testing.T) {
 		},
 		{
 			// 命中 /param/:id/*
-			name: ":id*",
+			name:   ":id*",
 			method: http.MethodGet,
-			path: "/param/123/abc",
-			found: true,
+			path:   "/param/123/abc",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
-					path: "*",
+					path:    "*",
 					handler: mockHandler,
 				},
 				pathParams: map[string]string{"id": "123"},
@@ -415,13 +415,13 @@ func Test_router_findRoute(t *testing.T) {
 
 		{
 			// 命中 /param/:id/detail
-			name: ":id*",
+			name:   ":id*",
 			method: http.MethodGet,
-			path: "/param/123/detail",
-			found: true,
+			path:   "/param/123/detail",
+			found:  true,
 			mi: &matchInfo{
 				n: &node{
-					path: "detail",
+					path:    "detail",
 					handler: mockHandler,
 				},
 				pathParams: map[string]string{"id": "123"},
@@ -459,102 +459,102 @@ func Test_findRoute_Middleware(t *testing.T) {
 			}
 		}
 	}
-	mdlsRoute := []struct{
+	mdlsRoute := []struct {
 		method string
-		path string
-		mdls []Middleware
-	} {
+		path   string
+		mdls   []Middleware
+	}{
 		{
 			method: http.MethodGet,
-			path: "/a/b",
-			mdls: []Middleware{mdlBuilder('a'), mdlBuilder('b')},
-		},
-		{
-			method: http.MethodGet,
-			path: "/a/*",
-			mdls: []Middleware{mdlBuilder('a'), mdlBuilder('*')},
+			path:   "/a/b",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b')},
 		},
 		{
 			method: http.MethodGet,
-			path: "/a/b/*",
-			mdls: []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('*')},
+			path:   "/a/*",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('*')},
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/b/*",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('*')},
 		},
 		{
 			method: http.MethodPost,
-			path: "/a/b/*",
-			mdls: []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('*')},
+			path:   "/a/b/*",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('*')},
 		},
 		{
 			method: http.MethodPost,
-			path: "/a/*/c",
-			mdls: []Middleware{mdlBuilder('a'), mdlBuilder('*'), mdlBuilder('c')},
+			path:   "/a/*/c",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('*'), mdlBuilder('c')},
 		},
 		{
 			method: http.MethodPost,
-			path: "/a/b/c",
-			mdls: []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('c')},
+			path:   "/a/b/c",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('c')},
 		},
 		{
 			method: http.MethodDelete,
-			path: "/*",
-			mdls: []Middleware{mdlBuilder('*')},
+			path:   "/*",
+			mdls:   []Middleware{mdlBuilder('*')},
 		},
 		{
 			method: http.MethodDelete,
-			path: "/",
-			mdls: []Middleware{mdlBuilder('/')},
+			path:   "/",
+			mdls:   []Middleware{mdlBuilder('/')},
 		},
 	}
 	r := newRouter()
 	for _, mdlRoute := range mdlsRoute {
 		r.addRoute(mdlRoute.method, mdlRoute.path, nil, mdlRoute.mdls...)
 	}
-	testCases := []struct{
-		name string
+	testCases := []struct {
+		name   string
 		method string
-		path string
+		path   string
 		// 我们借助 ctx 里面的 RespData 字段来判断 middleware 有没有按照预期执行
 		wantResp string
-	} {
+	}{
 		{
-			name: "static, not match",
+			name:   "static, not match",
 			method: http.MethodGet,
-			path: "/a",
+			path:   "/a",
 		},
 		{
-			name: "static, match",
-			method: http.MethodGet,
-			path: "/a/c",
+			name:     "static, match",
+			method:   http.MethodGet,
+			path:     "/a/c",
 			wantResp: "a*",
 		},
 		{
-			name: "static and star",
-			method: http.MethodGet,
-			path: "/a/b",
+			name:     "static and star",
+			method:   http.MethodGet,
+			path:     "/a/b",
 			wantResp: "a*ab",
 		},
 		{
-			name: "static and star",
-			method: http.MethodGet,
-			path: "/a/b/c",
+			name:     "static and star",
+			method:   http.MethodGet,
+			path:     "/a/b/c",
 			wantResp: "a*abab*",
 		},
 		{
-			name: "abc",
-			method: http.MethodPost,
-			path: "/a/b/c",
+			name:     "abc",
+			method:   http.MethodPost,
+			path:     "/a/b/c",
 			wantResp: "a*cab*abc",
 		},
 		{
-			name: "root",
-			method: http.MethodDelete,
-			path: "/",
+			name:     "root",
+			method:   http.MethodDelete,
+			path:     "/",
 			wantResp: "/",
 		},
 		{
-			name: "root star",
-			method: http.MethodDelete,
-			path: "/a",
+			name:     "root star",
+			method:   http.MethodDelete,
+			path:     "/a",
 			wantResp: "/*",
 		},
 	}
@@ -567,7 +567,7 @@ func Test_findRoute_Middleware(t *testing.T) {
 				// 使用 string 可读性比较高
 				assert.Equal(t, tc.wantResp, string(ctx.RespData))
 			}
-			for i := len(mdls)-1; i >=0 ; i -- {
+			for i := len(mdls) - 1; i >= 0; i-- {
 				root = mdls[i](root)
 			}
 			// 开始调度
