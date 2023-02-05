@@ -1,4 +1,3 @@
-
 package orm
 
 // RawExpr 代表一个原生表达式
@@ -80,13 +79,22 @@ type SubqueryExpr struct {
 func (SubqueryExpr) expr() {}
 
 func Any(sub Subquery) SubqueryExpr {
-	panic("implement me")
+	return SubqueryExpr{
+		s:    sub,
+		pred: "ANY",
+	}
 }
 
 func All(sub Subquery) SubqueryExpr {
-	panic("implement me")
+	return SubqueryExpr{
+		s:    sub,
+		pred: "ALL",
+	}
 }
 
 func Some(sub Subquery) SubqueryExpr {
-	panic("implement me")
+	return SubqueryExpr{
+		s:    sub,
+		pred: "SOME",
+	}
 }

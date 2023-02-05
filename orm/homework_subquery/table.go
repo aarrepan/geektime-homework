@@ -1,4 +1,3 @@
-
 package orm
 
 type TableReference interface {
@@ -7,7 +6,7 @@ type TableReference interface {
 
 type Table struct {
 	entity any
-	alias string
+	alias  string
 }
 
 func TableOf(entity any) Table {
@@ -18,63 +17,61 @@ func TableOf(entity any) Table {
 
 func (t Table) C(name string) Column {
 	return Column{
-		name: name,
+		name:  name,
 		table: t,
 	}
 }
-
 
 func (t Table) tableAlias() string {
 	return t.alias
 }
 
 func (t Table) As(alias string) Table {
-	return Table {
+	return Table{
 		entity: t.entity,
-		alias: alias,
+		alias:  alias,
 	}
 }
 
 func (t Table) Join(target TableReference) *JoinBuilder {
 	return &JoinBuilder{
-		left: t,
+		left:  t,
 		right: target,
-		typ: "JOIN",
+		typ:   "JOIN",
 	}
 }
 
 func (t Table) LeftJoin(target TableReference) *JoinBuilder {
 	return &JoinBuilder{
-		left: t,
+		left:  t,
 		right: target,
-		typ: "LEFT JOIN",
+		typ:   "LEFT JOIN",
 	}
 }
 
 func (t Table) RightJoin(target TableReference) *JoinBuilder {
 	return &JoinBuilder{
-		left: t,
+		left:  t,
 		right: target,
-		typ: "RIGHT JOIN",
+		typ:   "RIGHT JOIN",
 	}
 }
 
 type JoinBuilder struct {
-	left TableReference
+	left  TableReference
 	right TableReference
-	typ string
+	typ   string
 }
 
 var _ TableReference = Join{}
 
 type Join struct {
-	left TableReference
+	left  TableReference
 	right TableReference
-	typ string
-	on []Predicate
+	typ   string
+	on    []Predicate
 	using []string
 }
-
 
 func (j Join) Join(target TableReference) *JoinBuilder {
 	return &JoinBuilder{
@@ -104,47 +101,66 @@ func (j Join) tableAlias() string {
 	return ""
 }
 
-func (j *JoinBuilder) On(ps...Predicate) Join {
-	return Join {
-		left: j.left,
+func (j *JoinBuilder) On(ps ...Predicate) Join {
+	return Join{
+		left:  j.left,
 		right: j.right,
-		on: ps,
-		typ: j.typ,
+		on:    ps,
+		typ:   j.typ,
 	}
 }
 
-func (j *JoinBuilder) Using(cs...string) Join {
-	return Join {
-		left: j.left,
+func (j *JoinBuilder) Using(cs ...string) Join {
+	return Join{
+		left:  j.left,
 		right: j.right,
 		using: cs,
-		typ: j.typ,
+		typ:   j.typ,
 	}
 }
 
 type Subquery struct {
-
+	s       QueryBuilder
+	columns []Selectable
+	alias   string
+	table   TableReference
 }
 
 func (s Subquery) expr() {}
 
 func (s Subquery) tableAlias() string {
-	panic("implement me")
+	return s.alias
 }
 
 func (s Subquery) Join(target TableReference) *JoinBuilder {
-	panic("implement me")
+	return &JoinBuilder{
+		left:  s,
+		right: target,
+		typ:   "JOIN",
+	}
 }
 
 func (s Subquery) LeftJoin(target TableReference) *JoinBuilder {
-	panic("implement me")
+	return &JoinBuilder{
+		left:  s,
+		right: target,
+		typ:   "LEFT JOIN",
+	}
 }
 
 func (s Subquery) RightJoin(target TableReference) *JoinBuilder {
-	panic("implement me")
+	return &JoinBuilder{
+		left:  s,
+		right: target,
+		typ:   "RIGHT JOIN",
+	}
 }
 
+// C
+// C 返回查询列的结构体
 func (s Subquery) C(name string) Column {
-	panic("implement me")
+	return Column{
+		table: s,
+		name:  name,
+	}
 }
-

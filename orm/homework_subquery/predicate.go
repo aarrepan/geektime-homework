@@ -1,4 +1,3 @@
-
 package orm
 
 // op 代表操作符
@@ -6,15 +5,15 @@ type op string
 
 // 后面可以每次支持新的操作符就加一个
 const (
-	opEQ  = "="
-	opLT  = "<"
-	opGT  = ">"
-	opIN  = "IN"
-	opExist  = "EXIST"
-	opAND = "AND"
-	opOR  = "OR"
-	opNOT = "NOT"
-	opAdd = "+"
+	opEQ    = "="
+	opLT    = "<"
+	opGT    = ">"
+	opIN    = "IN"
+	opExist = "EXIST"
+	opAND   = "AND"
+	opOR    = "OR"
+	opNOT   = "NOT"
+	opAdd   = "+"
 	opMulti = "*"
 )
 
@@ -44,7 +43,10 @@ type Predicate binaryExpr
 func (Predicate) expr() {}
 
 func Exist(sub Subquery) Predicate {
-	panic("implement me")
+	return Predicate{
+		op:    opExist,
+		right: sub,
+	}
 }
 
 func Not(p Predicate) Predicate {
