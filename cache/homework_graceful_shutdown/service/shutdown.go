@@ -4,6 +4,9 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
 	"time"
 )
 
@@ -17,7 +20,9 @@ type ShutdownCallback func(ctx context.Context)
 
 // 你需要实现这个方法
 func WithShutdownCallbacks(cbs ...ShutdownCallback) Option {
-	panic("implement me")
+	return func(app *App) {
+		app.cbs = cbs
+	}
 }
 
 // 这里我已经预先定义好了各种可配置字段
@@ -37,7 +42,16 @@ type App struct {
 
 // NewApp 创建 App 实例，注意设置默认值，同时使用这些选项
 func NewApp(servers []*Server, opts ...Option) *App {
-	panic("implement me")
+	result := &App{
+		waitTime:        10 * time.Second,
+		cbTimeout:       3 * time.Second,
+		shutdownTimeout: 30 * time.Second,
+		servers:         servers,
+	}
+	for _, opt := range opts {
+		opt(result)
+	}
+	return result
 }
 
 // StartAndServe 你主要要实现这个方法
@@ -57,28 +71,66 @@ func (app *App) StartAndServe() {
 	// 从这里开始优雅退出监听系统信号，强制退出以及超时强制退出。
 	// 优雅退出的具体步骤在 shutdown 里面实现
 	// 所以你需要在这里恰当的位置，调用 shutdown
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, signals...)
+	<-ch
+	go func() {
+		select {
+		case <-ch:
+			log.Printf("强制退出")
+			os.Exit(1)
+		case <-time.After(app.shutdownTimeout):
+			log.Printf("超时强制退出")
+			os.Exit(1)
+		}
+	}()
+	app.shutdown()
 }
 
 // shutdown 你要设计这里面的执行步骤。
 func (app *App) shutdown() {
 	log.Println("开始关闭应用，停止接收新请求")
 	// 你需要在这里让所有的 server 拒绝新请求
-
+	for _, s := range app.servers {
+		s.rejectReq()
+	}
 	log.Println("等待正在执行请求完结")
 	// 在这里等待一段时间
+	time.Sleep(app.waitTime)
 
 	log.Println("开始关闭服务器")
 	// 并发关闭服务器，同时要注意协调所有的 server 都关闭之后才能步入下一个阶段
+	var waitServers sync.WaitGroup
+	waitServers.Add(len(app.servers))
+	for _, srv := range app.servers {
+		srvCp := srv
+		go func() {
+			if err := srvCp.stop(); err != nil {
+				log.Printf("关闭服务失败%s \n", srvCp.name)
+			}
+			waitServers.Done()
+		}()
+	}
+	waitServers.Wait()
 
 	log.Println("开始执行自定义回调")
 	// 并发执行回调，要注意协调所有的回调都执行完才会步入下一个阶段
-
+	waitServers.Add(len(app.cbs))
+	for _, cb := range app.cbs {
+		c := cb
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), app.cbTimeout)
+			c(ctx)
+			cancel()
+			waitServers.Done()
+		}()
+	}
+	waitServers.Wait()
 	// 释放资源
 	log.Println("开始释放资源")
 
 	// 这一个步骤不需要你干什么，这是假装我们整个应用自己要释放一些资源
 	app.close()
-	panic("实现前面的步骤")
 }
 
 func (app *App) close() {
@@ -136,8 +188,8 @@ func (s *Server) rejectReq() {
 	s.mux.reject = true
 }
 
-func (s *Server) stop(ctx context.Context) error {
+func (s *Server) stop() error {
 	log.Printf("服务器%s关闭中", s.name)
 	// 在这里模拟停下服务器
-	panic("implement me")
+	return s.srv.Shutdown(context.Background())
 }
