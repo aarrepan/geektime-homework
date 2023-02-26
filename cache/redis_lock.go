@@ -8,6 +8,7 @@ import (
 	"github.com/go-redis/redis/v9"
 	"github.com/google/uuid"
 	"golang.org/x/sync/singleflight"
+	"sync"
 	"time"
 )
 
@@ -27,18 +28,21 @@ var (
 
 // Client 就是对 redis.Cmdable 的二次封装
 type Client struct {
-	client redis.Cmdable
-	//valGenerator func() string
-	g singleflight.Group
+	client       redis.Cmdable
+	valGenerator func() string
+	g            singleflight.Group
 }
 
 func NewClient(client redis.Cmdable) *Client {
 	return &Client{
 		client: client,
+		valGenerator: func() string {
+			return uuid.New().String()
+		},
 	}
 }
 
-func (c *Client) SingleflightLock(ctx context.Context,
+func (c *Client) SingleFlightLock(ctx context.Context,
 	key string,
 	expiration time.Duration,
 	timeout time.Duration, retry RetryStrategy) (*Lock, error) {
@@ -68,8 +72,8 @@ func (c *Client) Lock(ctx context.Context,
 	expiration time.Duration,
 	timeout time.Duration, retry RetryStrategy) (*Lock, error) {
 	var timer *time.Timer
-	val := uuid.New().String()
-	//val := c.valGenerator()
+	//val := uuid.New().String()
+	val := c.valGenerator()
 	for {
 		// 在这里重试
 		lctx, cancel := context.WithTimeout(ctx, timeout)
@@ -80,18 +84,17 @@ func (c *Client) Lock(ctx context.Context,
 		}
 
 		if res == "OK" {
-			return &Lock{
-				client:     c.client,
-				key:        key,
-				value:      val,
-				expiration: expiration,
-				unlockChan: make(chan struct{}, 1),
-			}, nil
+			return newLock(c.client, key, val, expiration), nil
 		}
 
 		interval, ok := retry.Next()
 		if !ok {
-			return nil, fmt.Errorf("redis-lock: 超出重试限制, %w", ErrFailedToPreemptLock)
+			if err != nil {
+				err = fmt.Errorf("最后一次重试错误: %w", err)
+			} else {
+				err = fmt.Errorf("锁被他人持有: %w", ErrFailedToPreemptLock)
+			}
+			return nil, fmt.Errorf("redis-lock: 超出重试限制，%w", err)
 		}
 		if timer == nil {
 			timer = time.NewTimer(interval)
@@ -109,7 +112,8 @@ func (c *Client) Lock(ctx context.Context,
 func (c *Client) TryLock(ctx context.Context,
 	key string,
 	expiration time.Duration) (*Lock, error) {
-	val := uuid.New().String()
+	//val := uuid.New().String()
+	val := c.valGenerator()
 	ok, err := c.client.SetNX(ctx, key, val, expiration).Result()
 	if err != nil {
 		return nil, err
@@ -118,13 +122,7 @@ func (c *Client) TryLock(ctx context.Context,
 		// 代表的是别人抢到了锁
 		return nil, ErrFailedToPreemptLock
 	}
-	return &Lock{
-		client:     c.client,
-		key:        key,
-		value:      val,
-		expiration: expiration,
-		unlockChan: make(chan struct{}, 1),
-	}, nil
+	return newLock(c.client, key, val, expiration), nil
 }
 
 //func (c *Client) Unlock(ctx context.Context, key string) error {
@@ -141,12 +139,27 @@ type Lock struct {
 	value      string
 	expiration time.Duration
 	unlockChan chan struct{}
+	unlockOnce sync.Once
+}
+
+func newLock(client redis.Cmdable, key string, value string, expiration time.Duration) *Lock {
+	return &Lock{
+		client:     client,
+		key:        key,
+		value:      value,
+		expiration: expiration,
+		unlockChan: make(chan struct{}, 1),
+	}
 }
 
 func (l *Lock) AutoRefresh(interval time.Duration, timeout time.Duration) error {
-	timeoutChan := make(chan struct{}, 1)
 	// 间隔多久续约一次
 	ticker := time.NewTicker(interval)
+	timeoutChan := make(chan struct{}, 1)
+	defer func() {
+		ticker.Stop()
+		close(timeoutChan)
+	}()
 	for {
 		select {
 		case <-ticker.C:
@@ -196,12 +209,10 @@ func (l *Lock) Refresh(ctx context.Context) error {
 func (l *Lock) Unlock(ctx context.Context) error {
 	res, err := l.client.Eval(ctx, luaUnlock, []string{l.key}, l.value).Int64()
 	defer func() {
-		//close(l.unlockChan)
-		select {
-		case l.unlockChan <- struct{}{}:
-		default:
-			// 说明没有人调用 AutoRefresh
-		}
+		l.unlockOnce.Do(func() {
+			l.unlockChan <- struct{}{}
+			close(l.unlockChan)
+		})
 	}()
 	//if err == redis.Nil {
 	//	return ErrLockNotHold
